@@ -1,0 +1,26 @@
+{
+    "name": "meizhuan/bwc-sdk",
+    "description": "PHP SDK for Meizhuan Bawangcan open APIs.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.0",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-openssl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Meizhuan\\BwcSdk\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Meizhuan\\BwcSdk\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "php tests/run.php",
+        "lint": "find src tests examples -name '*.php' -print0 | xargs -0 -n1 php -l"
+    }
+}
