@@ -3,10 +3,20 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/env.php';
 
 use Meizhuan\BwcSdk\Client;
+use Meizhuan\BwcSdk\Config;
 
-$client = Client::test('your-client-id-at-least-16-chars', 'your-client-secret');
+meizhuan_bwc_load_env(__DIR__ . '/../.env');
+
+$client = new Client(
+    getenv('MEIZHUAN_BWC_CLIENT_ID') ?: 'your-client-id-at-least-16-chars',
+    getenv('MEIZHUAN_BWC_CLIENT_SECRET') ?: 'your-client-secret',
+    [
+        'environment' => getenv('MEIZHUAN_BWC_ENV') ?: Config::ENV_TEST,
+    ]
+);
 
 $list = $client->tasks()->getList('13800138000', 118.795075, 31.976364, [
     'pageNum' => 1,

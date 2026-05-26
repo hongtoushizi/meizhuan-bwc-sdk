@@ -104,4 +104,12 @@ echo $client->callbacks()->successJson();
 composer test
 composer lint
 ```
+
+如需使用真实凭证做一次测试环境联调：
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入 clientId/clientSecret
+composer integration-test
+```
 # meizhuan-bwc-sdk
