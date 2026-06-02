@@ -17,7 +17,8 @@ final class Config
     private string $baseUri;
     private int $timeout;
     private bool $signOrderRequests;
-    private bool $throwOnApiError;
+    /** @var callable|null */
+    private $logger;
 
     public function __construct(
         string $clientId,
@@ -26,14 +27,15 @@ final class Config
         ?string $baseUri = null,
         int $timeout = 10,
         bool $signOrderRequests = false,
-        bool $throwOnApiError = true
+        bool $throwOnApiError = false,
+        ?callable $logger = null
     ) {
         $this->clientId = $clientId;
         $this->clientSecret = $clientSecret;
         $this->baseUri = rtrim($baseUri ?? self::baseUriFor($environment), '/');
         $this->timeout = $timeout;
         $this->signOrderRequests = $signOrderRequests;
-        $this->throwOnApiError = $throwOnApiError;
+        $this->logger = $logger;
     }
 
     public static function baseUriFor(string $environment): string
@@ -76,6 +78,11 @@ final class Config
 
     public function throwOnApiError(): bool
     {
-        return $this->throwOnApiError;
+        return false;
+    }
+
+    public function logger(): ?callable
+    {
+        return $this->logger;
     }
 }

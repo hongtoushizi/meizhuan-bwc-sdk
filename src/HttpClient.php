@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Meizhuan\BwcSdk;
 
-use Meizhuan\BwcSdk\Exception\ApiException;
-
 final class HttpClient
 {
     private Config $config;
@@ -27,16 +25,30 @@ final class HttpClient
 
     private function request(string $method, string $path, array $query, ?array $body, bool $sign): array
     {
-        $query = $this->withCommonQuery($this->withoutNulls($query), $sign);
+        $startAt = microtime(true);
+        $requestQuery = $this->withCommonQuery($this->withoutNulls($query), $sign);
+        $requestBody = $this->withoutNulls($body ?? []);
         $url = $this->config->baseUri() . '/' . ltrim($path, '/');
 
-        if ($query !== []) {
-            $url .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        if ($requestQuery !== []) {
+            $url .= '?' . http_build_query($requestQuery, '', '&', PHP_QUERY_RFC3986);
         }
+
+        $result = [];
+        $httpStatus = 0;
+        $raw = null;
+        $curlError = null;
 
         $ch = curl_init($url);
         if ($ch === false) {
-            throw ApiException::curl('Unable to initialize cURL.');
+            $result = [
+                'code' => 0,
+                'msg' => 'Unable to initialize cURL.',
+                'http_status' => 0,
+            ];
+            $this->logRequest($method, $url, $requestQuery, $requestBody, $result, $startAt, 'error', 'curl_init_failed');
+
+            return $result;
         }
 
         $headers = [
@@ -52,7 +64,7 @@ final class HttpClient
         ]);
 
         if ($method === 'POST') {
-            $payload = json_encode($this->withoutNulls($body ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = json_encode($requestBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
             $headers[] = 'Content-Type: application/json';
         }
@@ -61,28 +73,41 @@ final class HttpClient
 
         $raw = curl_exec($ch);
         if ($raw === false) {
-            $message = curl_error($ch);
+            $curlError = curl_error($ch);
+            $httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            throw ApiException::curl($message);
+
+            $result = [
+                'code' => 0,
+                'msg' => $curlError,
+                'http_status' => $httpStatus,
+                'curl_error' => $curlError,
+            ];
+            $this->logRequest($method, $url, $requestQuery, $requestBody, $result, $startAt, 'error', 'curl_error');
+
+            return $result;
         }
 
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($status < 200 || $status >= 300) {
-            throw ApiException::http($status, (string) $raw);
-        }
-
         $decoded = json_decode((string) $raw, true);
-        if (!is_array($decoded)) {
-            throw ApiException::curl('API returned a non-JSON response: ' . (string) $raw);
+        if (is_array($decoded)) {
+            $result = $decoded;
+        } else {
+            $result = [
+                'code' => 0,
+                'msg' => 'API returned a non-JSON response.',
+                'http_status' => $httpStatus,
+                'raw' => (string) $raw,
+            ];
         }
 
-        if ($this->config->throwOnApiError() && isset($decoded['code']) && (int) $decoded['code'] !== 200) {
-            throw ApiException::api($decoded);
-        }
+        $level = $this->isSuccessfulResult($httpStatus, $result) ? 'info' : 'error';
+        $message = $level === 'info' ? 'meizhuan_bwc_request' : 'meizhuan_bwc_request_failed';
+        $this->logRequest($method, $url, $requestQuery, $requestBody, $result, $startAt, $level, $message);
 
-        return $decoded;
+        return $result;
     }
 
     private function withCommonQuery(array $query, bool $sign): array
@@ -99,5 +124,49 @@ final class HttpClient
     private function withoutNulls(array $params): array
     {
         return array_filter($params, static fn ($value): bool => $value !== null);
+    }
+
+    private function isSuccessfulResult(int $httpStatus, array $result): bool
+    {
+        if ($httpStatus < 200 || $httpStatus >= 300) {
+            return false;
+        }
+
+        return !isset($result['code']) || (int) $result['code'] === 200;
+    }
+
+    private function logRequest(
+        string $method,
+        string $url,
+        array $query,
+        array $body,
+        array $result,
+        float $startAt,
+        string $level,
+        string $message
+    ): void {
+        $logger = $this->config->logger();
+        if ($logger === null) {
+            return;
+        }
+
+        $params = [
+            'method' => $method,
+            'query' => $query,
+            'body' => $body,
+        ];
+
+        try {
+            $logger([
+                'url' => $url,
+                'params' => $params,
+                'result' => $result,
+                'duration' => round(microtime(true) - $startAt, 6),
+                'level' => $level,
+                'message' => $message,
+            ]);
+        } catch (\Throwable $e) {
+            // Logging must never change API call behavior.
+        }
     }
 }

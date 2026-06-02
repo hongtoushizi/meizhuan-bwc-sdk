@@ -81,6 +81,35 @@ $client = Client::test('clientId', 'clientSecret', [
 ]);
 ```
 
+## 请求日志
+
+SDK 不直接依赖业务项目的日志类。调用方可以通过 `logger` 选项注入一个 callable，SDK 每次请求都会传入完整请求 URL、参数、返回结果、耗时和日志级别。
+
+在 `yy_oms_admin` 项目中可以这样接入 `SysLogger`：
+
+```php
+use Meizhuan\BwcSdk\Client;
+use library\log\SysLogger;
+
+$sysLogger = SysLogger::getInstance('meizhuan-bwc');
+
+$client = Client::test($clientId, $clientSecret, [
+    'logger' => static function (array $log) use ($sysLogger): void {
+        $sysLogger->logApi(
+            $log['url'],
+            json_encode($log['params'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            json_encode($log['result'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            (float) $log['duration'],
+            (string) $log['level'],
+            (string) $log['message'],
+            'meizhuan-bwc'
+        );
+    },
+]);
+```
+
+接口返回 `code != 200`、HTTP 非 2xx、cURL 错误、非 JSON 响应时，SDK 都不会抛 `ApiException`。如果接口有 JSON 返回，会直接返回该数组；如果没有可解析 JSON，会返回包含 `code`、`msg`、`http_status`、`raw/curl_error` 的数组，并同样写日志。
+
 ## 回调验签
 
 ```php

@@ -21,7 +21,8 @@ final class Client
             $options['baseUri'] ?? null,
             $options['timeout'] ?? 10,
             $options['signOrderRequests'] ?? false,
-            $options['throwOnApiError'] ?? true
+            false,
+            $options['logger'] ?? null
         );
 
         $this->http = new HttpClient($this->config);
